@@ -30,7 +30,7 @@
 
 namespace fextl::pmr {
 static fextl::pmr::default_resource FEXDefaultResource;
-std::pmr::memory_resource* get_default_resource() {
+memory_resource* get_default_resource() {
   return &FEXDefaultResource;
 }
 } // namespace fextl::pmr

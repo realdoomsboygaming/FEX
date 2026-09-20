@@ -6,11 +6,11 @@
 
 #include <FEXCore/Utils/MathUtils.h>
 #include <FEXCore/Utils/TypeDefines.h>
+#include <FEXCore/fextl/memory_resource.h>
 
 #include <bitset>
 #include <cstddef>
-#include <memory_resource>
-namespace fex_pmr = std::pmr;
+namespace fex_pmr = fextl::pmr;
 #include <sys/user.h>
 
 #include <mutex>

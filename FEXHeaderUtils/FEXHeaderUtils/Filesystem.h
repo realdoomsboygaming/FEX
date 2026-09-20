@@ -7,7 +7,6 @@
 
 #include <algorithm>
 #include <fcntl.h>
-#include <memory_resource>
 #include <string_view>
 #if defined(__linux__)
 #include <linux/limits.h>
@@ -257,8 +256,8 @@ inline fextl::string LexicallyNormal(const fextl::string& Path) {
   size_t DataSize = (sizeof(std::string_view) + sizeof(void*) * 2) * (SeparatorCount + 2);
   void* Data = alloca(DataSize);
   fextl::pmr::fixed_size_monotonic_buffer_resource mbr(Data, DataSize);
-  std::pmr::polymorphic_allocator<std::byte> pa {&mbr};
-  std::pmr::list<std::string_view> Parts {pa};
+  fextl::pmr::polymorphic_allocator<std::byte> pa {&mbr};
+  fextl::pmr::list<std::string_view> Parts {pa};
 
   size_t CurrentOffset {};
   do {

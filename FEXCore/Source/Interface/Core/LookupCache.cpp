@@ -21,9 +21,9 @@ $end_info$
 namespace FEXCore {
 GuestToHostMap::GuestToHostMap()
   : BlockLinks_mbr {"FEXMem_BlockLinks"} {
-  BlockLinks_pma = fextl::make_unique<std::pmr::polymorphic_allocator<std::byte>>(&BlockLinks_mbr);
+  BlockLinks_pma = fextl::make_unique<fextl::pmr::polymorphic_allocator<std::byte>>(&BlockLinks_mbr);
   // Setup our PMR map.
-  BlockLinks = BlockLinks_pma->new_object<BlockLinksMapType>();
+  BlockLinks = BlockLinks_pma->new_object<BlockLinksMapType>(BlockLinksMapType::allocator_type {&BlockLinks_mbr});
 }
 
 // iOS-Madeira ml606: live/cumulative census for the L1-only A/B. `live` is what

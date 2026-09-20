@@ -92,15 +92,15 @@ struct GuestToHostMap {
     }
   };
 
-  // Use a monotonic buffer resource to allocate both the std::pmr::map and its members.
+  // Use a monotonic buffer resource to allocate both the PMR map and its members.
   // This allows us to quickly clear the block link map by clearing the monotonic allocator.
   // If we had allocated the block link map without the MBR, then clearing the map would require slowly
   // walking each block member and destructing objects.
   //
   // This makes `BlockLinks` look like a raw pointer that could memory leak, but since it is backed by the MBR, it won't.
   fextl::pmr::named_monotonic_page_buffer_resource BlockLinks_mbr;
-  using BlockLinksMapType = std::pmr::map<BlockLinkTag, FEXCore::Context::BlockDelinkerFunc>;
-  fextl::unique_ptr<std::pmr::polymorphic_allocator<std::byte>> BlockLinks_pma;
+  using BlockLinksMapType = fextl::pmr::map<BlockLinkTag, FEXCore::Context::BlockDelinkerFunc>;
+  fextl::unique_ptr<fextl::pmr::polymorphic_allocator<std::byte>> BlockLinks_pma;
   BlockLinksMapType* BlockLinks;
 
   struct BlockEntry {

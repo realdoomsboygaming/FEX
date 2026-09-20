@@ -12,6 +12,7 @@
 #include <FEXCore/fextl/sstream.h>
 #include <FEXHeaderUtils/Syscalls.h>
 #include <FEXCore/fextl/memory.h>
+#include <FEXCore/fextl/memory_resource.h>
 #include <FEXCore/fextl/vector.h>
 
 #include <algorithm>
