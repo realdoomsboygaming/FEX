@@ -129,7 +129,14 @@ inline void* VirtualAlloc(void* Base, size_t Size, bool Execute = false, bool Co
     Parameter.Type = MemExtendedParameterAttributeFlags;
     Parameter.ULong64 = MEM_EXTENDED_PARAMETER_EC_CODE;
   };
-  return ::VirtualAlloc2(nullptr, Base, Size, Flags, Execute ? PAGE_EXECUTE_READWRITE : PAGE_READWRITE, Execute ? &Parameter : nullptr,
+  /* iOS never receives a writable+executable view. FEX's DualMap write
+   * helpers redirect code emission to the RW alias before the RX view runs. */
+#ifdef FEX_IOS_HOST
+  DWORD Protection = Execute ? PAGE_EXECUTE_READ : PAGE_READWRITE;
+#else
+  DWORD Protection = Execute ? PAGE_EXECUTE_READWRITE : PAGE_READWRITE;
+#endif
+  return ::VirtualAlloc2(nullptr, Base, Size, Flags, Protection, Execute ? &Parameter : nullptr,
                          Execute ? 1 : 0);
 #else
   return ::VirtualAlloc(Base, Size, Flags, Execute ? PAGE_EXECUTE_READWRITE : PAGE_READWRITE);
@@ -166,7 +173,13 @@ inline bool VirtualProtect(void* Ptr, size_t Size, ProtectOptions options) {
   } else if (options == (ProtectOptions::Read | ProtectOptions::Exec)) {
     prot = PAGE_EXECUTE_READ;
   } else if (options == (ProtectOptions::Read | ProtectOptions::Write | ProtectOptions::Exec)) {
+#ifdef FEX_IOS_HOST
+    // The caller's logical request is preserved by the dual-map contract;
+    // the canonical executable view remains RX and writes use WriteAddr().
+    prot = PAGE_EXECUTE_READ;
+#else
     prot = PAGE_EXECUTE_READWRITE;
+#endif
   } else {
     LOGMAN_MSG_A_FMT("Unknown VirtualProtect options combination");
   }
@@ -187,11 +200,21 @@ FEX_DEFAULT_VISIBILITY extern void VirtualName(const char* Name, void* Ptr, size
 // All commit parameters are ignored here, they are unnecessary as Linux supports overcommit
 
 inline void* VirtualAlloc(size_t Size, bool Execute = false, bool Commit = true) {
-  return FEXCore::Allocator::mmap(nullptr, Size, PROT_READ | PROT_WRITE | (Execute ? PROT_EXEC : 0), MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
+#if defined(__APPLE__) || defined(FEX_IOS_HOST)
+  const int Prot = Execute ? (PROT_READ | PROT_EXEC) : (PROT_READ | PROT_WRITE);
+#else
+  const int Prot = PROT_READ | PROT_WRITE | (Execute ? PROT_EXEC : 0);
+#endif
+  return FEXCore::Allocator::mmap(nullptr, Size, Prot, MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
 }
 
 inline void* VirtualAlloc(void* Base, size_t Size, bool Execute = false, bool Commit = true) {
-  return FEXCore::Allocator::mmap(Base, Size, PROT_READ | PROT_WRITE | (Execute ? PROT_EXEC : 0), MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
+#if defined(__APPLE__) || defined(FEX_IOS_HOST)
+  const int Prot = Execute ? (PROT_READ | PROT_EXEC) : (PROT_READ | PROT_WRITE);
+#else
+  const int Prot = PROT_READ | PROT_WRITE | (Execute ? PROT_EXEC : 0);
+#endif
+  return FEXCore::Allocator::mmap(Base, Size, Prot, MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
 }
 
 inline void VirtualFree(void* Ptr, size_t Size) {
@@ -211,6 +234,12 @@ inline bool VirtualProtect(void* Ptr, size_t Size, ProtectOptions options) {
   if ((options & ProtectOptions::Exec) == ProtectOptions::Exec) {
     prot |= PROT_EXEC;
   }
+#if defined(__APPLE__) || defined(FEX_IOS_HOST)
+  if ((prot & PROT_EXEC) && (prot & PROT_WRITE)) {
+    prot &= ~PROT_WRITE;
+    prot |= PROT_READ;
+  }
+#endif
 
   return ::mprotect(Ptr, Size, prot) == 0;
 }

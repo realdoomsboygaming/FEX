@@ -17,6 +17,7 @@ $end_info$
 #include <FEXCore/HLE/SyscallHandler.h>
 #include <FEXCore/Config/Config.h>
 #include <FEXCore/Utils/Allocator.h>
+#include <FEXCore/Utils/DualMap.h>
 #include <FEXCore/Utils/LogManager.h>
 #include <FEXCore/Utils/Threads.h>
 #include <FEXCore/Utils/Profiler.h>
@@ -553,9 +554,21 @@ void BTCpuProcessInit() {
   // Allocate the syscall/unixcall trampolines in the lower 2GB of the address space
   SIZE_T Size = 4;
   void* Addr = nullptr;
+#ifdef FEX_IOS_HOST
+  MEM_EXTENDED_PARAMETER TrampolineParam {};
+  TrampolineParam.Type = MemExtendedParameterAttributeFlags;
+  TrampolineParam.ULong64 = MEM_EXTENDED_PARAMETER_EC_CODE;
+  NtAllocateVirtualMemoryEx(NtCurrentProcess(), &Addr, &Size, MEM_RESERVE | MEM_COMMIT,
+                            PAGE_EXECUTE_READ, &TrampolineParam, 1);
+#else
   NtAllocateVirtualMemory(NtCurrentProcess(), &Addr, (1U << 31) - 1, &Size, MEM_RESERVE | MEM_COMMIT, PAGE_EXECUTE_READWRITE);
+#endif
   InvalidationTracker->HandleMemoryProtectionNotification(reinterpret_cast<uint64_t>(Addr), Size, PAGE_EXECUTE);
+#ifdef FEX_IOS_HOST
+  *reinterpret_cast<uint32_t*>(FEXCore::DualMap::WriteAddr(Addr)) = 0x2ecd2ecd;
+#else
   *reinterpret_cast<uint32_t*>(Addr) = 0x2ecd2ecd;
+#endif
   BridgeInstrs::Syscall = Addr;
   BridgeInstrs::UnixCall = reinterpret_cast<void*>(reinterpret_cast<uintptr_t>(Addr) + 2);
 

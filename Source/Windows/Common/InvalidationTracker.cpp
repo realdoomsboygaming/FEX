@@ -532,7 +532,13 @@ ULONG InvalidationTracker::GetUntrapProt(uint64_t Address) const {
   if (DEPDisabled && DEPPromotedIntervals.Query(Address).Enclosed) {
     return PAGE_READWRITE;
   }
+#ifdef FEX_IOS_HOST
+  // The executable view is never made writable. FEX emits through the
+  // DualMap RW alias and resumes execution on the RX alias.
+  return PAGE_EXECUTE_READ;
+#else
   return PAGE_EXECUTE_READWRITE;
+#endif
 }
 
 void InvalidationTracker::InvalidateIntervalInternal(uint64_t Address, uint64_t Size) {

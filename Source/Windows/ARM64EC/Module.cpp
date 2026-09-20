@@ -15,6 +15,7 @@ $end_info$
 #include <FEXCore/HLE/SyscallHandler.h>
 #include <FEXCore/Config/Config.h>
 #include <FEXCore/Utils/Allocator.h>
+#include <FEXCore/Utils/DualMap.h>
 #include <FEXCore/Utils/LogManager.h>
 #include <FEXCore/Utils/Threads.h>
 #include <FEXCore/Utils/Profiler.h>
@@ -1011,10 +1012,26 @@ NTSTATUS ProcessInit() {
 
   CPUFeatures.emplace(*CTX);
 
+ #ifdef FEX_IOS_HOST
+  /* Route this one-page return sentinel through the same EC_CODE pool as all
+   * other executable FEX allocations. The returned address is RX; the byte is
+   * initialized through the shared RW alias. */
+  MEM_EXTENDED_PARAMETER ReturnParam {};
+  ReturnParam.Type = MemExtendedParameterAttributeFlags;
+  ReturnParam.ULong64 = MEM_EXTENDED_PARAMETER_EC_CODE;
+  X64ReturnInstr = ::VirtualAlloc2(nullptr, nullptr, FEXCore::Utils::FEX_PAGE_SIZE,
+                                   MEM_COMMIT | MEM_RESERVE | MEM_TOP_DOWN,
+                                   PAGE_EXECUTE_READ, &ReturnParam, 1);
+ #else
   X64ReturnInstr = ::VirtualAlloc(nullptr, FEXCore::Utils::FEX_PAGE_SIZE, MEM_COMMIT | MEM_TOP_DOWN, PAGE_EXECUTE_READWRITE);
+ #endif
   InvalidationTracker->HandleMemoryProtectionNotification(reinterpret_cast<uint64_t>(X64ReturnInstr), FEXCore::Utils::FEX_PAGE_SIZE,
                                                           PAGE_EXECUTE_READ);
+ #ifdef FEX_IOS_HOST
+  *reinterpret_cast<uint8_t*>(FEXCore::DualMap::WriteAddr(X64ReturnInstr)) = 0xc3;
+ #else
   *reinterpret_cast<uint8_t*>(X64ReturnInstr) = 0xc3;
+ #endif
 
   /* iOS-Madeira ml199: state this address explicitly.
    *

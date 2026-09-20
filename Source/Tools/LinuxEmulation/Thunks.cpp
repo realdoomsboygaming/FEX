@@ -17,6 +17,8 @@ $end_info$
 #include <FEXCore/Debug/InternalThreadState.h>
 #include <FEXCore/Utils/LogManager.h>
 #include <FEXCore/Utils/CompilerDefs.h>
+#include <FEXCore/Utils/AllocatorHooks.h>
+#include <FEXCore/Utils/DualMap.h>
 #include <FEXCore/fextl/set.h>
 #include <FEXCore/fextl/string.h>
 #include <FEXCore/fextl/unordered_map.h>
@@ -321,17 +323,29 @@ MakeHostTrampolineForGuestFunction(void* HostPacker, uintptr_t GuestTarget, uint
   if (ThunkHandler->HostTrampolineInstanceDataAvailable < HostToGuestTrampolineSize) {
     const auto allocation_step = 16 * 1024;
     ThunkHandler->HostTrampolineInstanceDataAvailable = allocation_step;
+#ifdef FEX_IOS_HOST
+    ThunkHandler->HostTrampolineInstanceDataPtr = reinterpret_cast<uint8_t *>(
+      FEXCore::Allocator::VirtualAlloc(ThunkHandler->HostTrampolineInstanceDataAvailable, true));
+#else
     ThunkHandler->HostTrampolineInstanceDataPtr = (uint8_t*)mmap(0, ThunkHandler->HostTrampolineInstanceDataAvailable,
                                                                  PROT_READ | PROT_WRITE | PROT_EXEC, MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
+#endif
 
-    LOGMAN_THROW_A_FMT(ThunkHandler->HostTrampolineInstanceDataPtr != MAP_FAILED, "Failed to mmap HostTrampolineInstanceDataPtr");
+    LOGMAN_THROW_A_FMT(ThunkHandler->HostTrampolineInstanceDataPtr != nullptr &&
+                       ThunkHandler->HostTrampolineInstanceDataPtr != MAP_FAILED,
+                       "Failed to allocate HostTrampolineInstanceDataPtr");
   }
 
   auto HostTrampoline = reinterpret_cast<HostToGuestTrampolinePtr*>(ThunkHandler->HostTrampolineInstanceDataPtr);
   ThunkHandler->HostTrampolineInstanceDataAvailable -= HostToGuestTrampolineSize;
   ThunkHandler->HostTrampolineInstanceDataPtr += HostToGuestTrampolineSize;
-  memcpy(HostTrampoline, (void*)&HostToGuestTrampolineTemplate, HostToGuestTrampolineSize);
-  GetInstanceInfo(HostTrampoline) = TrampolineInstanceInfo {
+ #ifdef FEX_IOS_HOST
+  auto HostTrampolineWrite = reinterpret_cast<HostToGuestTrampolinePtr *>(FEXCore::DualMap::WriteAddr(HostTrampoline));
+ #else
+  auto HostTrampolineWrite = HostTrampoline;
+ #endif
+  memcpy(HostTrampolineWrite, (void*)&HostToGuestTrampolineTemplate, HostToGuestTrampolineSize);
+  GetInstanceInfo(HostTrampolineWrite) = TrampolineInstanceInfo {
     .HostPacker = HostPacker, .CallCallback = (uintptr_t)&ThunkHandler_impl::CallCallback, .GuestUnpacker = GuestUnpacker, .GuestTarget = GuestTarget};
 
   ThunkHandler->GuestcallToHostTrampoline[gci] = HostTrampoline;
