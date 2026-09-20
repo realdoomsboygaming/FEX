@@ -184,7 +184,8 @@ inline bool VirtualProtect(void* Ptr, size_t Size, ProtectOptions options) {
     LOGMAN_MSG_A_FMT("Unknown VirtualProtect options combination");
   }
 
-  return ::VirtualProtect(Ptr, Size, prot, nullptr) == 0;
+  DWORD OldProtect {};
+  return ::VirtualProtect(Ptr, Size, prot, &OldProtect) != 0;
 }
 
 FEX_DEFAULT_VISIBILITY extern VirtualNamePtr VirtualName;
